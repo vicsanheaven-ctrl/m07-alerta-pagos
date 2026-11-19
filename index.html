@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monitor de Pagos Recibidos</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --green: #10b981;
+      --green-dark: #065f46;
+      --nequi: #da0081;
+      --daviplata: #ed1c24;
+      --bancolombia: #fdda24;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background 0.3s ease;
+    }
+
+    body.flash-alerta {
+      background: #065f46;
+    }
+
+    /* LOGIN */
+    #vista-login {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .login-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px 24px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .login-card h1 { font-size: 1.5rem; margin-bottom: 6px; text-align: center; }
+    .login-card p { color: var(--muted); font-size: 0.9rem; text-align: center; margin-bottom: 24px; }
+
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      color: var(--text);
+      font-size: 1rem;
+      margin-bottom: 16px;
+      outline: none;
+    }
+    input:focus { border-color: var(--green); }
+
+    .btn {
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: 10px;
+      background: var(--green);
+      color: #022c22;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .btn:hover { filter: brightness(1.08); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .error-msg {
+      color: #fca5a5;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      margin-bottom: 14px;
+      display: none;
+      text-align: center;
+    }
+
+    /* MONITOR */
+    #vista-monitor {
+      display: none;
+      max-width: 780px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 18px;
+      flex: 1;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tienda-info h2 { font-size: 1.35rem; }
+    .estado-vivo {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.82rem;
+      color: var(--green);
+      margin-top: 4px;
+    }
+    .punto-vivo {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulso 1.6s infinite;
+    }
+    @keyframes pulso {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.25); }
+    }
+
+    .acciones-header { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-sec {
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .btn-sec.activo { border-color: var(--green); color: var(--green); }
+
+    /* RESUMEN */
+    .resumen {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .stat-card span { display: block; font-size: 0.8rem; color: var(--muted); }
+    .stat-card strong { font-size: 1.45rem; margin-top: 4px; display: block; }
+
+    /* BANNER ULTIMO PAGO */
+    .ultimo-pago {
+      background: linear-gradient(135deg, #064e3b, #065f46);
+      border: 2px solid var(--green);
+      border-radius: 16px;
+      padding: 24px 20px;
+      text-align: center;
+      margin-bottom: 22px;
+      display: none;
+    }
+    .ultimo-pago.nuevo {
+      animation: zoomAlerta 0.6s ease;
+      box-shadow: 0 0 35px rgba(16, 185, 129, 0.55);
+    }
+    @keyframes zoomAlerta {
+      0% { transform: scale(0.94); }
+      50% { transform: scale(1.03); }
+      100% { transform: scale(1); }
+    }
+    .ultimo-pago .etiqueta { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: #a7f3d0; }
+    .ultimo-pago .monto-grande { font-size: 2.8rem; font-weight: 800; margin: 8px 0; color: #ffffff; }
+    .ultimo-pago .detalle { font-size: 1.1rem; color: #ecfdf5; }
+
+    /* LISTA HISTORIAL */
+    .titulo-seccion {
+      font-size: 0.95rem;
+      color: var(--muted);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .lista-pagos { display: flex; flex-direction: column; gap: 10px; }
+
+    .pago-item {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .pago-izq { display: flex; flex-direction: column; gap: 4px; }
+    .pago-remitente { font-weight: 600; font-size: 1rem; }
+    .pago-meta { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--muted); }
+
+    .badge {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .badge-Nequi { background: var(--nequi); color: #fff; }
+    .badge-Daviplata { background: var(--daviplata); color: #fff; }
+    .badge-Bancolombia { background: var(--bancolombia); color: #111827; }
+    .badge-Otro { background: #475569; color: #fff; }
+
+    .pago-monto { font-size: 1.25rem; font-weight: 800; color: var(--green); white-space: nowrap; }
+
+    .vacio {
+      text-align: center;
+      padding: 36px 20px;
+      color: var(--muted);
+      background: var(--card);
+      border-radius: 12px;
+      border: 1px dashed var(--border);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PANTALLA DE INGRESO -->
+  <section id="vista-login">
+    <div class="login-card">
+      <h1>Monitor de Pagos</h1>
+      <p>Ingresa el código de tu tienda y el PIN de caja</p>
+
+      <div id="login-error" class="error-msg"></div>
+
+      <form id="form-login">
+        <label for="input-slug">Código de tienda</label>
+        <input id="input-slug" type="text" placeholder="Ej: demo" required autocomplete="off" />
+
+        <label for="input-pin">PIN de caja</label>
+        <input id="input-pin" type="password" inputmode="numeric" placeholder="••••" required />
+
+        <button id="btn-entrar" class="btn" type="submit">Activar Monitor</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- PANTALLA DEL MONITOR EN VIVO -->
+  <main id="vista-monitor">
+    <header>
+      <div class="tienda-info">
+        <h2 id="nombre-comercio">Tienda</h2>
+        <div class="estado-vivo">
+          <span class="punto-vivo"></span>
+          <span id="texto-estado">Conectado en tiempo real</span>
+        </div>
+      </div>
+
+      <div class="acciones-header">
+        <button id="btn-voz" class="btn-sec activo" type="button">🔊 Voz: ON</button>
+        <button id="btn-probar-voz" class="btn-sec" type="button">Probar sonido</button>
+        <button id="btn-salir" class="btn-sec" type="button">Salir</button>
+      </div>
+    </header>
+
+    <section class="resumen">
+      <div class="stat-card">
+        <span>Transferencias hoy</span>
+        <strong id="stat-cantidad">0</strong>
+      </div>
+      <div id="card-total" class="stat-card" style="display:none;">
+        <span>Total recibido hoy</span>
+        <strong id="stat-total">$ 0</strong>
+      </div>
+    </section>
+
+    <section id="banner-ultimo" class="ultimo-pago">
+      <div class="etiqueta">Último pago confirmado</div>
+      <div id="ultimo-monto" class="monto-grande">$ 0</div>
+      <div id="ultimo-detalle" class="detalle"></div>
+    </section>
+
+    <div class="titulo-seccion">Historial de hoy (Hora Colombia)</div>
+    <section id="lista-pagos" class="lista-pagos"></section>
+  </main>
+
+  <script>
+    // === CONFIGURACIÓN DE SUPABASE ===
+    const SUPABASE_URL = "https://lkvpvaybrxmznahznsln.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_YMHx-XXLMzrqmguHuqqPwg_DWZ0LYdU";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // === ESTADO ===
+    let comercioActual = null;
+    let pagosHoy = [];
+    let canalRealtime = null;
+    let vozActiva = true;
+    let audioCtx = null;
+
+    // === UTILIDADES ===
+    function formatearCOP(valor) {
+      return new Intl.NumberFormat("es-CO", {
+        style: "currency",
+        currency: "COP",
+        maximumFractionDigits: 0
+      }).format(Number(valor) || 0);
+    }
+
+    function formatearHoraColombia(isoDate) {
+      return new Intl.DateTimeFormat("es-CO", {
+        timeZone: "America/Bogota",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true
+      }).format(new Date(isoDate));
+    }
+
+    // Sonido tipo campana de caja (sin archivos externos)
+    function reproducirCampana() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === "suspended") audioCtx.resume();
+
+        const ahora = audioCtx.currentTime;
+        [880, 1318.5].forEach((freq, i) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, ahora + i * 0.14);
+          gain.gain.setValueAtTime(0.25, ahora + i * 0.14);
+          gain.gain.exponentialRampToValueAtTime(0.001, ahora + i * 0.14 + 0.45);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(ahora + i * 0.14);
+          osc.stop(ahora + i * 0.14 + 0.45);
+        });
+      } catch (e) {
+        console.warn("No se pudo reproducir campana:", e);
+      }
+    }
+
+    function anunciarPagoPorVoz(pago) {
+      if (!vozActiva) return;
+      reproducirCampana();
+
+      if (!("speechSynthesis" in window)) return;
+      window.speechSynthesis.cancel();
+
+      const montoRedondo = Math.round(Number(pago.monto));
+      const texto = `Pago recibido por ${pago.plataforma} de ${montoRedondo} pesos, de ${pago.remitente}`;
+      const mensaje = new SpeechSynthesisUtterance(texto);
+      mensaje.lang = "es-CO";
+      mensaje.rate = 0.98;
+      mensaje.pitch = 1;
+
+      setTimeout(() => {
+        window.speechSynthesis.speak(mensaje);
+      }, 350);
+    }
+
+    function renderizarPagos(esNuevo = false) {
+      const lista = document.getElementById("lista-pagos");
+      const statCantidad = document.getElementById("stat-cantidad");
+      const statTotal = document.getElementById("stat-total");
+      const banner = document.getElementById("banner-ultimo");
+
+      statCantidad.textContent = pagosHoy.length;
+
+      if (comercioActual?.mostrar_total_dia) {
+        document.getElementById("card-total").style.display = "block";
+        const total = pagosHoy.reduce((acc, p) => acc + Number(p.monto || 0), 0);
+        statTotal.textContent = formatearCOP(total);
+      } else {
+        document.getElementById("card-total").style.display = "none";
+      }
+
+      if (pagosHoy.length === 0) {
+        banner.style.display = "none";
+        lista.innerHTML = `<div class="vacio">Aún no han llegado pagos hoy. Cuando entre una transferencia aparecerá aquí al instante.</div>`;
+        return;
+      }
+
+      const ultimo = pagosHoy[0];
+      banner.style.display = "block";
+      document.getElementById("ultimo-monto").textContent = formatearCOP(ultimo.monto);
+      document.getElementById("ultimo-detalle").textContent =
+        `${ultimo.plataforma} • ${ultimo.remitente} • ${formatearHoraColombia(ultimo.fecha_hora)}`;
+
+      if (esNuevo) {
+        banner.classList.remove("nuevo");
+        void banner.offsetWidth;
+        banner.classList.add("nuevo");
+        document.body.classList.add("flash-alerta");
+        setTimeout(() => document.body.classList.remove("flash-alerta"), 1500);
+      }
+
+      lista.innerHTML = pagosHoy.map((p) => `
+        <div class="pago-item">
+          <div class="pago-izq">
+            <div class="pago-remitente">${p.remitente}</div>
+            <div class="pago-meta">
+              <span class="badge badge-${p.plataforma}">${p.plataforma}</span>
+              <span>${formatearHoraColombia(p.fecha_hora)}</span>
+            </div>
+          </div>
+          <div class="pago-monto">${formatearCOP(p.monto)}</div>
+        </div>
+      `).join("");
+    }
+
+    function suscribirRealtime(comercioId) {
+      if (canalRealtime) db.removeChannel(canalRealtime);
+
+      canalRealtime = db
+        .channel(`pagos-comercio-${comercioId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "pagos",
+            filter: `comercio_id=eq.${comercioId}`
+          },
+          (payload) => {
+            const nuevoPago = payload.new;
+            if (!pagosHoy.some((p) => p.id === nuevoPago.id)) {
+              pagosHoy.unshift(nuevoPago);
+              renderizarPagos(true);
+              anunciarPagoPorVoz(nuevoPago);
+            }
+          }
+        )
+        .subscribe((status) => {
+          const estadoEl = document.getElementById("texto-estado");
+          if (status === "SUBSCRIBED") {
+            estadoEl.textContent = "Conectado en tiempo real";
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            estadoEl.textContent = "Reconectando...";
+          }
+        });
+    }
+
+    // === EVENTOS ===
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tienda")) {
+      document.getElementById("input-slug").value = params.get("tienda");
+    }
+
+    document.getElementById("form-login").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const slug = document.getElementById("input-slug").value.trim();
+      const pin = document.getElementById("input-pin").value.trim();
+      const errorBox = document.getElementById("login-error");
+      const btn = document.getElementById("btn-entrar");
+
+      errorBox.style.display = "none";
+      btn.disabled = true;
+      btn.textContent = "Verificando...";
+
+      // Desbloquea el audio del navegador con este clic del usuario
+      reproducirCampana();
+
+      const { data, error } = await db.rpc("iniciar_monitor_caja", {
+        p_slug: slug,
+        p_pin: pin
+      });
+
+      btn.disabled = false;
+      btn.textContent = "Activar Monitor";
+
+      if (error || !data?.ok) {
+        errorBox.textContent = data?.error || error?.message || "No se pudo iniciar sesión";
+        errorBox.style.display = "block";
+        return;
+      }
+
+      comercioActual = data.comercio;
+      pagosHoy = Array.isArray(data.pagos) ? data.pagos : [];
+
+      document.getElementById("nombre-comercio").textContent = comercioActual.nombre;
+      document.getElementById("vista-login").style.display = "none";
+      document.getElementById("vista-monitor").style.display = "block";
+
+      renderizarPagos(false);
+      suscribirRealtime(comercioActual.id);
+
+      // Intentar mantener pantalla encendida en tablets/celulares
+      if ("wakeLock" in navigator) {
+        navigator.wakeLock.request("screen").catch(() => {});
+      }
+    });
+
+    document.getElementById("btn-voz").addEventListener("click", (e) => {
+      vozActiva = !vozActiva;
+      e.target.textContent = vozActiva ? "🔊 Voz: ON" : "🔇 Voz: OFF";
+      e.target.classList.toggle("activo", vozActiva);
+    });
+
+    document.getElementById("btn-probar-voz").addEventListener("click", () => {
+      anunciarPagoPorVoz({ plataforma: "Nequi", monto: 25000, remitente: "Prueba de sonido" });
+    });
+
+    document.getElementById("btn-salir").addEventListener("click", () => {
+      if (canalRealtime) db.removeChannel(canalRealtime);
+      comercioActual = null;
+      pagosHoy = [];
+      document.getElementById("input-pin").value = "";
+      document.getElementById("vista-monitor").style.display = "none";
+      document.getElementById("vista-login").style.display = "flex";
+    });
+  </script>
+</body>
+</html>
