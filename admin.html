@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel Admin — Microapps</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #0f172a; --card: #1e293b; --border: #334155;
+      --text: #f8fafc; --muted: #94a3b8; --green: #10b981;
+      --red: #ef4444; --blue: #38bdf8; --amber: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; padding: 20px; }
+    .hidden { display: none !important; }
+
+    /* LOGIN */
+    #vista-login { max-width: 360px; margin: 12vh auto; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
+    #vista-login h1 { font-size: 1.4rem; margin-bottom: 6px; text-align: center; }
+    #vista-login p { color: var(--muted); font-size: 0.9rem; text-align: center; margin-bottom: 20px; }
+
+    /* PANEL */
+    #vista-admin { max-width: 1050px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+    .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+    .tab-btn { padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--muted); cursor: pointer; font-weight: 600; }
+    .tab-btn.active { border-color: var(--green); color: var(--green); }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 18px; }
+    .card h2 { font-size: 1.05rem; margin-bottom: 14px; color: var(--blue); }
+
+    .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; align-items: end; }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 5px; }
+    input, select { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: #0f172a; color: var(--text); font-size: 0.92rem; }
+    input[type="checkbox"] { width: auto; transform: scale(1.2); margin-right: 6px; }
+    .check-wrap { display: flex; align-items: center; padding: 10px 0; font-size: 0.88rem; color: var(--muted); }
+
+    .btn { padding: 10px 14px; border: none; border-radius: 8px; background: var(--green); color: #022c22; font-weight: 700; cursor: pointer; font-size: 0.88rem; }
+    .btn-sec { padding: 7px 11px; border: 1px solid var(--border); border-radius: 8px; background: #0f172a; color: var(--text); cursor: pointer; font-size: 0.8rem; }
+    .btn-sec:hover { border-color: var(--blue); }
+    .btn-warn { border-color: var(--amber); color: var(--amber); }
+    .btn-danger { border-color: var(--red); color: #fca5a5; }
+    .btn-ok { border-color: var(--green); color: var(--green); }
+
+    .lista { display: flex; flex-direction: column; gap: 12px; }
+    .item { background: #0f172a; border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .item-top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .item-meta { font-size: 0.84rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 12px; }
+    .acciones { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .badge { padding: 3px 9px; border-radius: 999px; font-size: 0.74rem; font-weight: 700; }
+    .b-ok { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+    .b-off { background: rgba(239,68,68,0.2); color: #fca5a5; }
+    .b-app { background: rgba(56,189,248,0.18); color: var(--blue); }
+
+    #toast { position: fixed; bottom: 20px; right: 20px; background: var(--green); color: #022c22; padding: 10px 16px; border-radius: 10px; font-weight: 700; display: none; z-index: 99; }
+    .err { color: #fca5a5; font-size: 0.86rem; margin-bottom: 10px; text-align: center; }
+  </style>
+</head>
+<body>
+
+  <section id="vista-login">
+    <h1>Panel Admin</h1>
+    <p>Control central de clientes, paquetes y suscripciones</p>
+    <div id="login-err" class="err"></div>
+    <form id="form-login">
+      <label for="input-clave">Clave maestra</label>
+      <input id="input-clave" type="password" placeholder="••••••••" required style="margin-bottom:14px;" />
+      <button class="btn" style="width:100%;" type="submit">Ingresar</button>
+    </form>
+  </section>
+
+  <main id="vista-admin" class="hidden">
+    <header>
+      <div>
+        <h1 style="font-size:1.35rem;">Control Central de Microapps</h1>
+        <span style="font-size:0.82rem; color:var(--muted);">Clientes, suscripciones y combos Wompi</span>
+      </div>
+      <div class="acciones">
+        <button class="btn-sec" onclick="cargarDatos()">↻ Actualizar</button>
+        <button class="btn-sec btn-danger" onclick="salir()">Salir</button>
+      </div>
+    </header>
+
+    <div class="tabs">
+      <button id="tab-btn-comercios" class="tab-btn active" onclick="cambiarTab('comercios')">Comercios y Suscripciones</button>
+      <button id="tab-btn-paquetes" class="tab-btn" onclick="cambiarTab('paquetes')">Paquetes y Combos</button>
+    </div>
+
+    <!-- TAB COMERCIOS -->
+    <section id="tab-comercios">
+      <div class="card">
+        <h2>+ Nuevo Comercio</h2>
+        <form id="form-comercio" class="grid-form">
+          <div><label>Nombre negocio</label><input id="c-nombre" placeholder="Ej: Barbería El Rey" required /></div>
+          <div><label>Código tienda (slug)</label><input id="c-slug" placeholder="Ej: el-rey" required /></div>
+          <div><label>PIN de caja</label><input id="c-pin" placeholder="Ej: 4567" required /></div>
+          <div><label>Plan / Paquete</label><select id="c-paquete" required></select></div>
+          <div><label>Días iniciales</label><input id="c-dias" type="number" value="30" min="1" required /></div>
+          <div class="check-wrap"><input id="c-total" type="checkbox" checked /> Mostrar total día</div>
+          <button class="btn" type="submit">Crear Comercio</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Comercios Registrados (<span id="count-comercios">0</span>)</h2>
+        <div id="lista-comercios" class="lista"></div>
+      </div>
+    </section>
+
+    <!-- TAB PAQUETES -->
+    <section id="tab-paquetes" class="hidden">
+      <div class="card">
+        <h2>+ Nuevo Paquete o Combo</h2>
+        <form id="form-paquete" class="grid-form">
+          <div><label>Código único</label><input id="p-codigo" placeholder="Ej: COMBO-SPA" required /></div>
+          <div><label>Nombre visible</label><input id="p-nombre" placeholder="Ej: Combo Spa (M-07 + Spa)" required /></div>
+          <div><label>Precio COP</label><input id="p-precio" type="number" placeholder="75000" min="1000" required /></div>
+          <div><label>Días duración</label><input id="p-dias" type="number" value="30" min="1" required /></div>
+          <div><label>Apps (separadas por coma)</label><input id="p-apps" placeholder="M-07, M-09" required /></div>
+          <button class="btn" type="submit">Crear Paquete</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Paquetes Disponibles</h2>
+        <div id="lista-paquetes" class="lista"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast"></div>
+
+  <script>
+    const SUPABASE_URL = "https://lkvpvaybrxmznahznsln.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_YMHx-XXLMzrqmguHuqqPwg_DWZ0LYdU";
+    const BASE_URL = "https://vicsanheaven-ctrl.github.io/m07-alerta-pagos";
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let claveAdmin = "";
+    let comercios = [];
+    let paquetes = [];
+
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.style.display = "block";
+      setTimeout(() => (el.style.display = "none"), 2200);
+    }
+
+    function copiar(texto, label) {
+      navigator.clipboard.writeText(texto);
+      toast(`${label} copiado`);
+    }
+
+    function hoyColombia() {
+      return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+    }
+
+    function sumarDiasYmd(ymd, dias) {
+      const base = ymd && ymd >= hoyColombia() ? ymd : hoyColombia();
+      const [y, m, d] = base.split("-").map(Number);
+      const f = new Date(Date.UTC(y, m - 1, d));
+      f.setUTCDate(f.getUTCDate() + dias);
+      return f.toISOString().slice(0, 10);
+    }
+
+    function formatearCOP(n) {
+      return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(n || 0);
+    }
+
+    function cambiarTab(tab) {
+      document.getElementById("tab-comercios").classList.toggle("hidden", tab !== "comercios");
+      document.getElementById("tab-paquetes").classList.toggle("hidden", tab !== "paquetes");
+      document.getElementById("tab-btn-comercios").classList.toggle("active", tab === "comercios");
+      document.getElementById("tab-btn-paquetes").classList.toggle("active", tab === "paquetes");
+    }
+
+    async function cargarDatos() {
+      const { data, error } = await db.rpc("admin_obtener_datos", { p_clave: claveAdmin });
+      if (error || !data?.ok) {
+        document.getElementById("login-err").textContent = data?.error || error?.message || "Error";
+        return false;
+      }
+      comercios = data.comercios || [];
+      paquetes = data.paquetes || [];
+      renderSelectPaquetes();
+      renderComercios();
+      renderPaquetes();
+      return true;
+    }
+
+    function renderSelectPaquetes() {
+      const sel = document.getElementById("c-paquete");
+      sel.innerHTML = paquetes.filter(p => p.activo).map(p =>
+        `<option value="${p.id}">${p.nombre} (${formatearCOP(p.precio_cop)})</option>`
+      ).join("");
+    }
+
+    function renderComercios() {
+      document.getElementById("count-comercios").textContent = comercios.length;
+      const hoy = hoyColombia();
+      const cont = document.getElementById("lista-comercios");
+
+      cont.innerHTML = comercios.map(c => {
+        const vencido = !c.fecha_vencimiento || c.fecha_vencimiento < hoy;
+        const linkCaja = `${BASE_URL}/?tienda=${c.slug}`;
+        const linkPago = `${BASE_URL}/pagar.html?tienda=${c.slug}`;
+        return `
+          <div class="item">
+            <div class="item-top">
+              <div>
+                <strong>${c.nombre}</strong>
+                <span style="color:var(--muted); font-size:0.85rem;"> (${c.slug})</span>
+              </div>
+              <div style="display:flex; gap:6px;">
+                <span class="badge ${c.activo ? 'b-ok' : 'b-off'}">${c.activo ? 'ACTIVO' : 'PAUSADO'}</span>
+                <span class="badge ${vencido ? 'b-off' : 'b-ok'}">${vencido ? 'VENCIDO' : 'VENCE: ' + c.fecha_vencimiento}</span>
+              </div>
+            </div>
+            <div class="item-meta">
+              <span>Plan: <strong>${c.paquete_nombre || 'Sin plan'}</strong></span>
+              <span>PIN: <strong>${c.pin_caja}</strong></span>
+              <span>Total día: <strong>${c.mostrar_total_dia ? 'Sí' : 'No'}</strong></span>
+            </div>
+            <div class="acciones">
+              <button class="btn-sec" onclick="copiar('${linkCaja}', 'Link Monitor')">📋 Link Caja</button>
+              <button class="btn-sec" onclick="copiar('${linkPago}', 'Link de Pago')">💳 Link Pago</button>
+              <button class="btn-sec" onclick="copiar('${c.webhook_token}', 'Token MacroDroid')">🔑 Token</button>
+              <button class="btn-sec btn-ok" onclick="renovarManual('${c.id}')">+30 días</button>
+              <button class="btn-sec btn-warn" onclick="cambiarPin('${c.id}')">Cambiar PIN</button>
+              <button class="btn-sec ${c.activo ? 'btn-danger' : 'btn-ok'}" onclick="toggleComercio('${c.id}')">
+                ${c.activo ? 'Pausar' : 'Activar'}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderPaquetes() {
+      const cont = document.getElementById("lista-paquetes");
+      cont.innerHTML = paquetes.map(p => `
+        <div class="item">
+          <div class="item-top">
+            <div>
+              <strong>${p.nombre}</strong>
+              <span style="color:var(--muted); font-size:0.85rem;"> (${p.codigo})</span>
+            </div>
+            <span class="badge ${p.activo ? 'b-ok' : 'b-off'}">${p.activo ? 'VISIBLE EN PAGAR.HTML' : 'OCULTO'}</span>
+          </div>
+          <div class="item-meta">
+            <span>Precio: <strong>${formatearCOP(p.precio_cop)}</strong> / ${p.dias_duracion} días</span>
+            <span>Apps: ${(p.apps || []).map(a => `<span class="badge b-app">${a}</span>`).join(" ")}</span>
+          </div>
+          <div class="acciones">
+            <button class="btn-sec ${p.activo ? 'btn-danger' : 'btn-ok'}" onclick="togglePaquete('${p.id}', ${!p.activo})">
+              ${p.activo ? 'Ocultar paquete' : 'Activar paquete'}
+            </button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    async function renovarManual(id) {
+      const c = comercios.find(x => x.id === id);
+      if (!c) return;
+      const nuevaFecha = sumarDiasYmd(c.fecha_vencimiento, 30);
+      const paqId = c.paquete_id || paquetes[0]?.id;
+      const { data } = await db.rpc("admin_actualizar_comercio", {
+        p_clave: claveAdmin, p_id: c.id, p_pin: c.pin_caja,
+        p_mostrar_total: c.mostrar_total_dia, p_activo: true,
+        p_paquete_id: paqId, p_fecha_vencimiento: nuevaFecha
+      });
+      if (data?.ok) { toast(`Renovado hasta ${nuevaFecha}`); cargarDatos(); }
+    }
+
+    async function toggleComercio(id) {
+      const c = comercios.find(x => x.id === id);
+      if (!c) return;
+      const { data } = await db.rpc("admin_actualizar_comercio", {
+        p_clave: claveAdmin, p_id: c.id, p_pin: c.pin_caja,
+        p_mostrar_total: c.mostrar_total_dia, p_activo: !c.activo,
+        p_paquete_id: c.paquete_id, p_fecha_vencimiento: c.fecha_vencimiento
+      });
+      if (data?.ok) { toast(c.activo ? "Comercio pausado" : "Comercio activado"); cargarDatos(); }
+    }
+
+    async function cambiarPin(id) {
+      const c = comercios.find(x => x.id === id);
+      if (!c) return;
+      const nuevoPin = prompt(`Nuevo PIN para ${c.nombre}:`, c.pin_caja);
+      if (!nuevoPin || !nuevoPin.trim()) return;
+      const { data } = await db.rpc("admin_actualizar_comercio", {
+        p_clave: claveAdmin, p_id: c.id, p_pin: nuevoPin.trim(),
+        p_mostrar_total: c.mostrar_total_dia, p_activo: c.activo,
+        p_paquete_id: c.paquete_id, p_fecha_vencimiento: c.fecha_vencimiento
+      });
+      if (data?.ok) { toast("PIN actualizado"); cargarDatos(); }
+    }
+
+    async function togglePaquete(id, nuevoEstado) {
+      const { data } = await db.rpc("admin_toggle_paquete", {
+        p_clave: claveAdmin, p_id: id, p_activo: nuevoEstado
+      });
+      if (data?.ok) { toast("Paquete actualizado"); cargarDatos(); }
+    }
+
+    document.getElementById("form-login").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      document.getElementById("login-err").textContent = "";
+      claveAdmin = document.getElementById("input-clave").value.trim();
+      const ok = await cargarDatos();
+      if (ok) {
+        document.getElementById("vista-login").classList.add("hidden");
+        document.getElementById("vista-admin").classList.remove("hidden");
+      }
+    });
+
+    document.getElementById("form-comercio").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const { data, error } = await db.rpc("admin_crear_comercio", {
+        p_clave: claveAdmin,
+        p_nombre: document.getElementById("c-nombre").value,
+        p_slug: document.getElementById("c-slug").value,
+        p_pin: document.getElementById("c-pin").value,
+        p_mostrar_total: document.getElementById("c-total").checked,
+        p_paquete_id: document.getElementById("c-paquete").value,
+        p_dias: Number(document.getElementById("c-dias").value)
+      });
+      if (error || !data?.ok) { alert(data?.error || error?.message); return; }
+      e.target.reset();
+      document.getElementById("c-dias").value = 30;
+      toast("Comercio creado");
+      cargarDatos();
+    });
+
+    document.getElementById("form-paquete").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const apps = document.getElementById("p-apps").value.split(",").map(s => s.trim()).filter(Boolean);
+      const { data, error } = await db.rpc("admin_crear_paquete", {
+        p_clave: claveAdmin,
+        p_codigo: document.getElementById("p-codigo").value,
+        p_nombre: document.getElementById("p-nombre").value,
+        p_precio_cop: Number(document.getElementById("p-precio").value),
+        p_dias_duracion: Number(document.getElementById("p-dias").value),
+        p_apps: apps
+      });
+      if (error || !data?.ok) { alert(data?.error || error?.message); return; }
+      e.target.reset();
+      document.getElementById("p-dias").value = 30;
+      toast("Paquete creado");
+      cargarDatos();
+    });
+
+    function salir() {
+      claveAdmin = "";
+      document.getElementById("input-clave").value = "";
+      document.getElementById("vista-admin").classList.add("hidden");
+      document.getElementById("vista-login").classList.remove("hidden");
+    }
+  </script>
+</body>
+</html>
