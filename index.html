@@ -14,6 +14,7 @@
       --muted: #94a3b8;
       --green: #10b981;
       --green-dark: #065f46;
+      --amber: #f59e0b;
       --nequi: #da0081;
       --daviplata: #ed1c24;
       --bancolombia: #fdda24;
@@ -80,6 +81,9 @@
       font-weight: 700;
       font-size: 1rem;
       cursor: pointer;
+      display: inline-block;
+      text-align: center;
+      text-decoration: none;
     }
     .btn:hover { filter: brightness(1.08); }
     .btn:disabled { opacity: 0.6; cursor: not-allowed; }
@@ -88,12 +92,18 @@
       color: #fca5a5;
       background: rgba(239, 68, 68, 0.15);
       border: 1px solid rgba(239, 68, 68, 0.3);
-      padding: 10px;
-      border-radius: 8px;
+      padding: 12px;
+      border-radius: 10px;
       font-size: 0.88rem;
-      margin-bottom: 14px;
+      margin-bottom: 16px;
       display: none;
       text-align: center;
+    }
+
+    .btn-renovar-login {
+      margin-top: 10px;
+      padding: 10px 14px;
+      font-size: 0.92rem;
     }
 
     /* MONITOR */
@@ -118,13 +128,19 @@
     }
 
     .tienda-info h2 { font-size: 1.35rem; }
+    .meta-header {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 4px;
+    }
     .estado-vivo {
       display: inline-flex;
       align-items: center;
       gap: 6px;
       font-size: 0.82rem;
       color: var(--green);
-      margin-top: 4px;
     }
     .punto-vivo {
       width: 9px;
@@ -132,6 +148,18 @@
       border-radius: 50%;
       background: var(--green);
       animation: pulso 1.6s infinite;
+    }
+    .plan-vence {
+      font-size: 0.78rem;
+      color: var(--muted);
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .plan-vence.por-vencer {
+      color: var(--amber);
+      border-color: var(--amber);
     }
     @keyframes pulso {
       0%, 100% { opacity: 1; transform: scale(1); }
@@ -147,8 +175,10 @@
       color: var(--text);
       font-size: 0.85rem;
       cursor: pointer;
+      text-decoration: none;
     }
     .btn-sec.activo { border-color: var(--green); color: var(--green); }
+    .btn-sec.renovar { border-color: var(--amber); color: var(--amber); }
 
     /* RESUMEN */
     .resumen {
@@ -265,15 +295,19 @@
     <header>
       <div class="tienda-info">
         <h2 id="nombre-comercio">Tienda</h2>
-        <div class="estado-vivo">
-          <span class="punto-vivo"></span>
-          <span id="texto-estado">Conectado en tiempo real</span>
+        <div class="meta-header">
+          <div class="estado-vivo">
+            <span class="punto-vivo"></span>
+            <span id="texto-estado">Conectado en tiempo real</span>
+          </div>
+          <span id="badge-vencimiento" class="plan-vence" style="display:none;"></span>
         </div>
       </div>
 
       <div class="acciones-header">
         <button id="btn-voz" class="btn-sec activo" type="button">🔊 Voz: ON</button>
         <button id="btn-probar-voz" class="btn-sec" type="button">Probar sonido</button>
+        <a id="btn-renovar-header" class="btn-sec renovar" href="./pagar.html" target="_blank">💳 Renovar</a>
         <button id="btn-salir" class="btn-sec" type="button">Salir</button>
       </div>
     </header>
@@ -307,6 +341,7 @@
 
     // === ESTADO ===
     let comercioActual = null;
+    let slugActual = "";
     let pagosHoy = [];
     let canalRealtime = null;
     let vozActiva = true;
@@ -331,7 +366,13 @@
       }).format(new Date(isoDate));
     }
 
-    // Sonido tipo campana de caja (sin archivos externos)
+    function diasRestantes(fechaYmd) {
+      const hoyStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+      const hoy = new Date(`${hoyStr}T00:00:00Z`);
+      const vence = new Date(`${fechaYmd}T00:00:00Z`);
+      return Math.round((vence - hoy) / (1000 * 60 * 60 * 24));
+    }
+
     function reproducirCampana() {
       try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -464,16 +505,16 @@
 
     document.getElementById("form-login").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const slug = document.getElementById("input-slug").value.trim();
+      const slug = document.getElementById("input-slug").value.trim().toLowerCase();
       const pin = document.getElementById("input-pin").value.trim();
       const errorBox = document.getElementById("login-error");
       const btn = document.getElementById("btn-entrar");
 
       errorBox.style.display = "none";
+      errorBox.innerHTML = "";
       btn.disabled = true;
       btn.textContent = "Verificando...";
 
-      // Desbloquea el audio del navegador con este clic del usuario
       reproducirCampana();
 
       const { data, error } = await db.rpc("iniciar_monitor_caja", {
@@ -485,22 +526,48 @@
       btn.textContent = "Activar Monitor";
 
       if (error || !data?.ok) {
-        errorBox.textContent = data?.error || error?.message || "No se pudo iniciar sesión";
+        const msg = data?.error || error?.message || "No se pudo iniciar sesión";
+        const requiereRenovar = /vencida|no incluye|suspendida/i.test(msg);
+
+        errorBox.textContent = msg;
+        if (requiereRenovar && slug) {
+          const linkPago = document.createElement("a");
+          linkPago.href = `./pagar.html?tienda=${encodeURIComponent(slug)}`;
+          linkPago.className = "btn btn-renovar-login";
+          linkPago.textContent = "💳 Renovar Plan Ahora →";
+          errorBox.appendChild(document.createElement("br"));
+          errorBox.appendChild(linkPago);
+        }
         errorBox.style.display = "block";
         return;
       }
 
       comercioActual = data.comercio;
+      slugActual = slug;
       pagosHoy = Array.isArray(data.pagos) ? data.pagos : [];
 
       document.getElementById("nombre-comercio").textContent = comercioActual.nombre;
+      document.getElementById("btn-renovar-header").href = `./pagar.html?tienda=${encodeURIComponent(slugActual)}`;
+
+      // Mostrar fecha de vencimiento del plan
+      const badgeVence = document.getElementById("badge-vencimiento");
+      if (comercioActual.fecha_vencimiento) {
+        const dias = diasRestantes(comercioActual.fecha_vencimiento);
+        badgeVence.textContent = dias <= 5
+          ? `⚠️ Vence en ${dias} día${dias === 1 ? "" : "s"} (${comercioActual.fecha_vencimiento})`
+          : `Vence: ${comercioActual.fecha_vencimiento}`;
+        badgeVence.classList.toggle("por-vencer", dias <= 5);
+        badgeVence.style.display = "inline-block";
+      } else {
+        badgeVence.style.display = "none";
+      }
+
       document.getElementById("vista-login").style.display = "none";
       document.getElementById("vista-monitor").style.display = "block";
 
       renderizarPagos(false);
       suscribirRealtime(comercioActual.id);
 
-      // Intentar mantener pantalla encendida en tablets/celulares
       if ("wakeLock" in navigator) {
         navigator.wakeLock.request("screen").catch(() => {});
       }
@@ -519,6 +586,7 @@
     document.getElementById("btn-salir").addEventListener("click", () => {
       if (canalRealtime) db.removeChannel(canalRealtime);
       comercioActual = null;
+      slugActual = "";
       pagosHoy = [];
       document.getElementById("input-pin").value = "";
       document.getElementById("vista-monitor").style.display = "none";
