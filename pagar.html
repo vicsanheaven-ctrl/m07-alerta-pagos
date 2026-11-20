@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es-CO">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Renovar Suscripción</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="text/javascript" src="https://checkout.wompi.co/widget.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --green: #10b981;
+      --blue: #38bdf8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px 16px;
+      display: flex;
+      justify-content: center;
+    }
+    .container { width: 100%; max-width: 720px; }
+    header { text-align: center; margin-bottom: 24px; }
+    header h1 { font-size: 1.75rem; margin-bottom: 6px; }
+    header p { color: var(--muted); font-size: 0.95rem; }
+
+    .box-tienda {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 22px;
+    }
+    label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      color: var(--text);
+      font-size: 1rem;
+      outline: none;
+    }
+    input:focus { border-color: var(--green); }
+
+    .alerta {
+      padding: 14px;
+      border-radius: 10px;
+      margin-bottom: 18px;
+      font-size: 0.92rem;
+      display: none;
+      text-align: center;
+    }
+    .alerta.error {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+    }
+    .alerta.ok {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #6ee7b7;
+    }
+
+    .grid-paquetes {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .plan-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .plan-card h2 { font-size: 1.15rem; margin-bottom: 6px; }
+    .precio { font-size: 2rem; font-weight: 800; color: var(--green); }
+    .precio span { font-size: 0.88rem; font-weight: 400; color: var(--muted); }
+    .apps-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .tag-app {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--blue);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .btn {
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: 10px;
+      background: var(--green);
+      color: #022c22;
+      font-weight: 700;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .btn:hover { filter: brightness(1.08); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .volver {
+      display: inline-block;
+      margin-top: 10px;
+      color: #ffffff;
+      text-decoration: underline;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Activar o Renovar Plan</h1>
+      <p>Pago seguro con Nequi, PSE, Bancolombia o Tarjeta (activación automática)</p>
+    </header>
+
+    <div id="alerta" class="alerta"></div>
+
+    <section class="box-tienda">
+      <label for="input-slug">Código de tu tienda</label>
+      <input id="input-slug" type="text" placeholder="Ej: demo" autocomplete="off" />
+    </section>
+
+    <section id="lista-paquetes" class="grid-paquetes">
+      <p style="color: var(--muted); text-align: center;">Cargando planes disponibles...</p>
+    </section>
+  </main>
+
+  <script>
+    // === CONFIGURACIÓN ===
+    const SUPABASE_URL = "https://lkvpvaybrxmznahznsln.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_YMHx-XXLMzrqmguHuqqPwg_DWZ0LYdU";
+    // PEGA AQUÍ TU LLAVE PÚBLICA DE WOMPI (empieza por pub_prod_ o pub_test_)
+    const WOMPI_PUBLIC_KEY = "pub_prod_GYnR8T70jBviweHXGmBWKjmN6v05U7Jq";
+
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("tienda")) {
+      document.getElementById("input-slug").value = params.get("tienda");
+    }
+
+    function formatearCOP(valor) {
+      return new Intl.NumberFormat("es-CO", {
+        style: "currency",
+        currency: "COP",
+        maximumFractionDigits: 0
+      }).format(Number(valor) || 0);
+    }
+
+    function mostrarAlerta(tipo, html) {
+      const box = document.getElementById("alerta");
+      box.className = `alerta ${tipo}`;
+      box.innerHTML = html;
+      box.style.display = "block";
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    async function cargarPaquetes() {
+      const contenedor = document.getElementById("lista-paquetes");
+      const { data, error } = await db
+        .from("paquetes")
+        .select("codigo, nombre, precio_cop, dias_duracion, apps")
+        .eq("activo", true)
+        .order("precio_cop", { ascending: true });
+
+      if (error || !data?.length) {
+        contenedor.innerHTML = `<p style="color:#fca5a5;">No se pudieron cargar los planes.</p>`;
+        return;
+      }
+
+      contenedor.innerHTML = data.map((p) => `
+        <article class="plan-card">
+          <div>
+            <h2>${p.nombre}</h2>
+            <div class="precio">${formatearCOP(p.precio_cop)} <span>/ ${p.dias_duracion} días</span></div>
+            <div class="apps-list">
+              ${(p.apps || []).map((app) => `<span class="tag-app">${app}</span>`).join("")}
+            </div>
+          </div>
+          <button class="btn" type="button" onclick="iniciarPago('${p.codigo}', this)">
+            Pagar con Wompi
+          </button>
+        </article>
+      `).join("");
+    }
+
+    async function iniciarPago(codigoPaquete, boton) {
+      const slug = document.getElementById("input-slug").value.trim().toLowerCase();
+      document.getElementById("alerta").style.display = "none";
+
+      if (!slug) {
+        mostrarAlerta("error", "Escribe primero el <strong>código de tu tienda</strong> arriba.");
+        return;
+      }
+
+      if (!WOMPI_PUBLIC_KEY || WOMPI_PUBLIC_KEY.includes("PEGA_AQUI")) {
+        mostrarAlerta("error", "Falta configurar la llave pública de Wompi en pagar.html.");
+        return;
+      }
+
+      const textoOriginal = boton.textContent;
+      boton.disabled = true;
+      boton.textContent = "Preparando pago...";
+
+      try {
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/wompi-firma`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug, codigo_paquete: codigoPaquete })
+        });
+
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+          throw new Error(data.error || "No se pudo generar la orden de pago");
+        }
+
+        const checkout = new WidgetCheckout({
+          currency: data.moneda,
+          amountInCents: data.monto_en_centavos,
+          reference: data.referencia,
+          publicKey: WOMPI_PUBLIC_KEY,
+          signature: { integrity: data.firma_integridad }
+        });
+
+        checkout.open((result) => {
+          const tx = result?.transaction;
+          if (!tx) return;
+
+          if (tx.status === "APPROVED") {
+            mostrarAlerta(
+              "ok",
+              `¡Pago aprobado! Tu plan <strong>${data.paquete_nombre}</strong> se activó automáticamente por ${data.dias_duracion} días.<br>
+              <a class="volver" href="./?tienda=${encodeURIComponent(slug)}">Ir al Monitor de Caja →</a>`
+            );
+          } else if (tx.status === "PENDING") {
+            mostrarAlerta("ok", "Tu pago está pendiente de confirmación. Apenas se apruebe, tu plan se activará automáticamente.");
+          } else {
+            mostrarAlerta("error", `La transacción terminó con estado: ${tx.status}. Puedes intentar de nuevo.`);
+          }
+        });
+      } catch (err) {
+        mostrarAlerta("error", err.message || "Error conectando con la pasarela de pago");
+      } finally {
+        boton.disabled = false;
+        boton.textContent = textoOriginal;
+      }
+    }
+
+    cargarPaquetes();
+  </script>
+</body>
+</html>
