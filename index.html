@@ -254,6 +254,11 @@
     .badge-Nequi { background: var(--nequi); color: #fff; }
     .badge-Daviplata { background: var(--daviplata); color: #fff; }
     .badge-Bancolombia { background: var(--bancolombia); color: #111827; }
+    .badge-Davivienda { background: #e11d48; color: #fff; }
+    .badge-Banco-Caja-Social { background: #00529b; color: #fff; }
+    .badge-Nu { background: #820ad1; color: #fff; }
+    .badge-Lulo { background: #14b8a6; color: #042f2e; }
+    .badge-Dale { background: #f97316; color: #fff; }
     .badge-Otro { background: #475569; color: #fff; }
 
     .pago-monto { font-size: 1.25rem; font-weight: 800; color: var(--green); white-space: nowrap; }
@@ -307,6 +312,7 @@
       <div class="acciones-header">
         <button id="btn-voz" class="btn-sec activo" type="button">🔊 Voz: ON</button>
         <button id="btn-probar-voz" class="btn-sec" type="button">Probar sonido</button>
+        <button id="btn-fullscreen" class="btn-sec" type="button">⛶ Pantalla completa</button>
         <a id="btn-renovar-header" class="btn-sec renovar" href="./pagar.html" target="_blank">💳 Renovar</a>
         <button id="btn-salir" class="btn-sec" type="button">Salir</button>
       </div>
@@ -371,6 +377,10 @@
       const hoy = new Date(`${hoyStr}T00:00:00Z`);
       const vence = new Date(`${fechaYmd}T00:00:00Z`);
       return Math.round((vence - hoy) / (1000 * 60 * 60 * 24));
+    }
+
+    function claseBanco(plataforma) {
+      return String(plataforma || "Otro").trim().replace(/\s+/g, "-");
     }
 
     function reproducirCampana() {
@@ -456,7 +466,7 @@
           <div class="pago-izq">
             <div class="pago-remitente">${p.remitente}</div>
             <div class="pago-meta">
-              <span class="badge badge-${p.plataforma}">${p.plataforma}</span>
+              <span class="badge badge-${claseBanco(p.plataforma)}">${p.plataforma}</span>
               <span>${formatearHoraColombia(p.fecha_hora)}</span>
             </div>
           </div>
@@ -549,7 +559,6 @@
       document.getElementById("nombre-comercio").textContent = comercioActual.nombre;
       document.getElementById("btn-renovar-header").href = `./pagar.html?tienda=${encodeURIComponent(slugActual)}`;
 
-      // Mostrar fecha de vencimiento del plan
       const badgeVence = document.getElementById("badge-vencimiento");
       if (comercioActual.fecha_vencimiento) {
         const dias = diasRestantes(comercioActual.fecha_vencimiento);
@@ -581,6 +590,21 @@
 
     document.getElementById("btn-probar-voz").addEventListener("click", () => {
       anunciarPagoPorVoz({ plataforma: "Nequi", monto: 25000, remitente: "Prueba de sonido" });
+    });
+
+    const btnFullscreen = document.getElementById("btn-fullscreen");
+    btnFullscreen.addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      } else {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    });
+
+    document.addEventListener("fullscreenchange", () => {
+      const activo = Boolean(document.fullscreenElement);
+      btnFullscreen.textContent = activo ? "✕ Salir pantalla completa" : "⛶ Pantalla completa";
+      btnFullscreen.classList.toggle("activo", activo);
     });
 
     document.getElementById("btn-salir").addEventListener("click", () => {
