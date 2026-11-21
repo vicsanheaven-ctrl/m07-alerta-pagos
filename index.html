@@ -414,7 +414,7 @@
       window.speechSynthesis.cancel();
 
       const montoRedondo = Math.round(Number(pago.monto));
-      const texto = `Pago recibido por ${pago.plataforma} de ${montoRedondo} pesos, de ${pago.remitente}`;
+      const texto = `Recibió ${montoRedondo} pesos por ${pago.plataforma}`;
       const mensaje = new SpeechSynthesisUtterance(texto);
       mensaje.lang = "es-CO";
       mensaje.rate = 0.98;
